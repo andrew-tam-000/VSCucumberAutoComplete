@@ -135,10 +135,10 @@
     "devDependencies": {
         "@types/node": "^6.0.52",
         "jscs": "^3.0.7",
-        "typescript": "~2.3.0",
-        "vscode": "^1.1.10"
+        "typescript": "~2.3.0"
     },
     "dependencies": {
-        "vscode-languageclient": "^3.5.0"
+        "vscode-languageclient": "^4.1.4",
+        "vscode": "^1.1.18"
     }
 }
