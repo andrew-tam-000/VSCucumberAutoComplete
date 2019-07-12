@@ -6,7 +6,14 @@ type PagesSettings = {
 
 type CustomParameter = {
     parameter: string | RegExp,
-    value: string
+    value: string,
+    // This is the forced display value
+    display: string
+    // Make this an autosnippet, even if no wildcard
+    isAutosnippet: boolean,
+    // If specified, show a list of options
+    autocomplete: (string|number)[] | null
+    documentation: string
 };
 
 type FormatConf = {
@@ -23,6 +30,7 @@ interface Settings {
         smartSnippets?: boolean,
         stepsInvariants?: boolean,
         customParameters?: CustomParameter[],
+        customParametersAutocomplete?: boolean,
         skipDocStringsFormat?: boolean,
         formatConfOverride?: FormatConf[],
         onTypeFormat?: boolean,

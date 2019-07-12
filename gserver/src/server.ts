@@ -129,7 +129,7 @@ connection.onCompletion((position: TextDocumentPositionParams): CompletionItem[]
         return pagesHandler.getCompletion(line, position.position);
     }
     if (handleSteps() && stepsHandler) {
-        return stepsHandler.getCompletion(line, position.position.line, text);
+        return stepsHandler.getCompletion(line, position.position, text);
     }
 });
 
@@ -160,6 +160,7 @@ documents.onDidChangeContent((change): void => {
     const changeText = change.document.getText();
     //Validate document
     const diagnostics = validate(clearGherkinComments(changeText));
+    console.log("WOWOWOWOW");
     connection.sendDiagnostics({ uri: change.document.uri, diagnostics });
 });
 

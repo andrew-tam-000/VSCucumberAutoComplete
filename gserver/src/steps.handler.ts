@@ -24,13 +24,14 @@ import {
     Location,
     Range,
     CompletionItemKind,
-    InsertTextFormat
+    InsertTextFormat,
 } from 'vscode-languageserver';
 
 import * as glob from 'glob';
 
 export type Step = {
     id: string,
+    originalText: string,
     reg: RegExp,
     partialReg: RegExp,
     text: string,
@@ -38,7 +39,7 @@ export type Step = {
     def: Definition,
     count: number,
     gherkin: GherkinType,
-    documentation: string
+    documentation: any,
 };
 
 export type StepsCountHash = {
@@ -51,6 +52,8 @@ interface JSDocComments {
 
 const commentParser = require('doctrine');
 
+const customParamRegExp = new RegExp(/([^\\]|^){(?![\d,])(.*?)}/g);
+
 export default class StepsHandler {
 
     elements: Step[];
@@ -61,15 +64,28 @@ export default class StepsHandler {
 
     settings: Settings;
 
+    customParameterMap: { [customParam: string]: CustomParameter }
+
+    stepWithoutCustomParameterMap: {[key:string]:string}
+
     constructor(root: string, settings: Settings) {
         const { steps, syncfeatures } = settings.cucumberautocomplete;
         this.settings = settings;
+        this.customParameterMap = this.getCustomParameterMap();
         this.populate(root, steps);
         if (syncfeatures === true) {
             this.setElementsHash(`${root}/**/*.feature`);
         } else if (typeof syncfeatures === 'string') {
             this.setElementsHash(`${root}/${syncfeatures}`);
         }
+    }
+
+    // Get all the custom parameters and index them
+    getCustomParameterMap() : {[key: string]:CustomParameter} {
+        return this.settings.cucumberautocomplete.customParameters.reduce((acc, customParameterConfig) => {
+            acc[customParameterConfig.parameter.toString()] = customParameterConfig
+            return acc;
+        }, {});
     }
 
     getGherkinRegEx() {
@@ -220,7 +236,7 @@ export default class StepsHandler {
         //https://github.com/alexkrechik/VSCucumberAutoComplete/issues/99
         //Cucumber Expressions Custom Parameter Type Documentation
         //https://docs.cucumber.io/cucumber-expressions/#custom-parameters
-        step = step.replace(/([^\\]|^){(?![\d,])(.*?)}/g, '$1.*');
+        step = step.replace(customParamRegExp, '$1.*');
 
         //Escape all the regex symbols to avoid errors
         step = escapeRegExp(step);
@@ -345,13 +361,27 @@ export default class StepsHandler {
                 3) \*|\+|\{[^\}]+\} - * or + or {1, 2}
                 4) \)? - could be finished with opening brace
             */
+
             const match = res.match(/((?:\()?(?:\\.|\.|\[[^\]]+\])(?:\*|\+|\{[^\}]+\})(?:\)?))/g);
             if (match) {
+                const orderedCustomParamsInStep = (step.match(customParamRegExp) || []).map(str => str.trim());
                 for (let i = 0; i < match.length; i++) {
                     const num = i + 1;
-                    res = res.replace(match[i], () => '${' + num + ':}');
+                    if (this.settings.cucumberautocomplete.customParametersAutocomplete) {
+                        // If we are doing autocomplete, it means that all the customParamsw ill be expanded
+                        //
+                        // For the simplest case, each custom param will match up exactly with an index
+                        const customParameterConfig = this.customParameterMap[orderedCustomParamsInStep[i]];
+                        const autocompleteOptions = (customParameterConfig && customParameterConfig.autocomplete ? customParameterConfig.autocomplete : []).join(',');
+                        const snippet = `\${${num}|${autocompleteOptions}|}`;
+                        res = res.replace(match[i], () => snippet);
+                    }
+                    else {
+                        res = res.replace(match[i], () => '${' + num + ':}');
+                    }
                 }
             }
+
         } else {
             //We can replace some outputs, ex. strings in brackets to make insert strings more neat
             res = res.replace(/\"\[\^\"\]\+\"/g, '""');
@@ -368,8 +398,14 @@ export default class StepsHandler {
         stepRawComment;
     }
 
-    getSteps(fullStepLine: string, stepPart: string, def: Location, gherkin: GherkinType, comments: JSDocComments): Step[] {
+    getCustomParametersFromStep(step: string) : string[] {
+        return (step.match(customParamRegExp) || []).map(str => str.trim());
+    }
+
+    getSteps(fullStepLine: string, stepPart: string, def: Location, gherkin: GherkinType, comments: JSDocComments, originalStepPart: string): Step[] {
         const stepsVariants = this.settings.cucumberautocomplete.stepsInvariants ?
+            this.getStepTextInvariants(stepPart) : [stepPart];
+        const stepsVariantsForOriginalStep = this.settings.cucumberautocomplete.stepsInvariants ?
             this.getStepTextInvariants(stepPart) : [stepPart];
         const desc = this.getDescForStep(fullStepLine);
         const comment = comments[def.range.start.line];
@@ -397,9 +433,39 @@ export default class StepsHandler {
                 }
                 //Todo we should store full value here
                 const text = this.getTextForStep(step);
+                const originalText = this.getTextForStep(originalStepPart);
                 const id = 'step' + getMD5Id(text);
                 const count = this.getElementCount(id);
-                return { id, reg, partialReg, text, desc, def, count, gherkin, documentation };
+                const customParameterDocumentation = this.getCustomParametersFromStep(originalText).map(
+                    parameter => {
+                        const customParameter = this.customParameterMap[parameter];
+                        if (customParameter && customParameter.documentation) {
+                            return {
+                                parameter: customParameter.parameter,
+                                documentation: customParameter.documentation
+                            }
+                        }
+                        else {
+                            return null;
+                        }
+                    }
+                ).filter(str => str);
+
+                return { id, reg, partialReg, text, desc, def, count, gherkin, documentation: {
+                    kind: 'plaintext',
+                    value: [
+                        ...(customParameterDocumentation.length ? [
+                            'Custom Parameters',
+                            '\n',
+                            ...customParameterDocumentation.map(
+                                ({parameter, documentation}) => `${parameter}: ${documentation}`
+                            ),
+                            '\n'
+                        ] : []
+                        ),
+                        documentation
+                    ].join('\n')
+                }, originalText};
             });
     }
 
@@ -429,27 +495,38 @@ export default class StepsHandler {
             //TODO optimize
             let match;
             let finalLine;
+            let finalLineWithoutCustomParameters;
+
+            const currLineWithoutCustomParameters = line;
+            const currentMatchWithoutCustomParameters = this.geStepDefinitionMatch(line);
+            const nextLineWithoutCustomParameters = lines[lineIndex + 1];
+
             const currLine = this.handleCustomParameters(line);
             const currentMatch = this.geStepDefinitionMatch(currLine);
+
             //Add next line to our string to handle two-lines step definitions
             const nextLine = this.handleCustomParameters(lines[lineIndex + 1]);
             if (currentMatch) {
                 match = currentMatch;
                 finalLine = currLine;
+                finalLineWithoutCustomParameters = currLineWithoutCustomParameters;
+
             } else if (nextLine) {
                 const nextLineMatch = this.geStepDefinitionMatch(nextLine);
                 const bothLinesMatch = this.geStepDefinitionMatch(currLine + nextLine);
                 if ( bothLinesMatch && !nextLineMatch) {
                     match = bothLinesMatch;
                     finalLine = currLine + nextLine;
+                    finalLineWithoutCustomParameters = currLineWithoutCustomParameters + nextLineWithoutCustomParameters;
                 }
             }
             if (match) {
                 const [, beforeGherkin, gherkinString, , stepPart] = match;
+                const [, , , , originalStepPart] = this.geStepDefinitionMatch(finalLineWithoutCustomParameters);
                 const gherkin = getGherkinTypeLower(gherkinString);
                 const pos = Position.create(lineIndex, beforeGherkin.length);
                 const def = Location.create(getOSPath(filePath), Range.create(pos, pos));
-                steps = steps.concat(this.getSteps(finalLine, stepPart, def, gherkin, fileComments));
+                steps = steps.concat(this.getSteps(finalLine, stepPart, def, gherkin, fileComments, originalStepPart));
             }
             return steps;
         }, []);
@@ -471,6 +548,8 @@ export default class StepsHandler {
             return res;
         }, []);
     }
+
+    // We need to store the original step defintiion into elements as well
 
     populate(root: string, stepsPathes: StepSettings): void {
         this.elementsHash = {};
@@ -553,15 +632,52 @@ export default class StepsHandler {
         }
     }
 
-    getCompletion(line: string, lineNumber: number, text: string): CompletionItem[] | null {
+    isCustomParameterHighlighted(line: string, character: number, text: string): string|null {
+        // If the current string matches anything in array, we are highlighhting a custom parameter
+        //
+        const nearestPreviousOpeningBracket = line.lastIndexOf('{', character);
+        const nearestNextClosingBracket = line.indexOf('}', character);
+
+        // If we are inbetween some brackets, let's check the text
+        if (nearestPreviousOpeningBracket > -1 && nearestNextClosingBracket  > -1 && nearestNextClosingBracket  > nearestPreviousOpeningBracket) {
+            const phraseInBrackets = line.slice(nearestPreviousOpeningBracket, nearestNextClosingBracket + 1);
+            // Now, only if the phrase in brackets matches a customParameter, are we good to go
+            if (this.customParameterMap[phraseInBrackets]) {
+                return phraseInBrackets;
+            }
+        }
+        return;
+    }
+
+    getCompletion(line: string, position: Position, text: string): CompletionItem[] | null {
+        const { line: lineNumber, character}  = position;
         //Get line part without gherkin part
         const match = this.getGherkinMatch(line, text);
         if (!match) {
             return null;
         }
-        let [, , gherkinPart, , stepPart] = match;
+        let [, , gherkinPart, , originalStepPart] = match;
         //We don't need last word in our step part due to it could be incompleted
-        stepPart = stepPart.replace(/[^\s]+$/, '');
+        const stepPart = originalStepPart.replace(/[^\s]+$/, '');
+
+        /*
+        return [
+            {
+                label: this.elements
+            },
+            {
+                label: originalStepPart
+            }
+        ]
+        */
+
+        // Find the step definition that it matches exactly
+
+        // Check if we are inside a stepdefition and on top of a custom parameter
+        const highlightedCustomParameter = this.isCustomParameterHighlighted(line, character, text);
+        const highlightedCustomParameterConfig = this.customParameterMap[highlightedCustomParameter]
+        const customParameterAutocomplete = highlightedCustomParameterConfig && highlightedCustomParameterConfig .autocomplete;
+
         const res = this.elements
             //Filter via gherkin words comparing if strictGherkinCompletion option provided
             .filter((step) => {
@@ -577,15 +693,30 @@ export default class StepsHandler {
             //We got all the steps we need so we could make completions from them
             .map(step => {
                 return {
-                    label: step.text,
+                    label: this.settings.cucumberautocomplete.customParametersAutocomplete ? step.originalText : step.text,
                     kind: CompletionItemKind.Snippet,
                     data: step.id,
                     documentation: step.documentation,
                     sortText: getSortPrefix(step.count, 5) + '_' + step.text,
-                    insertText: this.getCompletionInsertText(step.text, stepPart),
+                    insertText: this.getCompletionInsertText(this.settings.cucumberautocomplete.customParametersAutocomplete ? step.originalText : step.text, stepPart),
                     insertTextFormat: InsertTextFormat.Snippet
                 };
             });
+
+        // If we have one, we need to return our completion list
+        if (!!highlightedCustomParameter && customParameterAutocomplete && !!customParameterAutocomplete.length) {
+            const documentation = this.customParameterMap[highlightedCustomParameter].documentation;
+            return customParameterAutocomplete.map(
+                    (autocomplete:string) => ({
+                        label: autocomplete,
+                        kind: CompletionItemKind.Text,
+                        documentation,
+                        //sortText: getSortPrefix(step.count, 5) + '_' + step.text,
+                        insertText: autocomplete,
+                        insertTextFormat: InsertTextFormat.PlainText
+                    })
+                );
+        }
         return res.length ? res : null;
     }
 
