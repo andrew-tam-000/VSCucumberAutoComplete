@@ -378,7 +378,7 @@ export default class StepsHandler {
                         // For the simplest case, each custom param will match up exactly with an index
                         const customParameterConfig = this.customParameterMap[orderedCustomParamsInStep[i]];
                         const autocompleteOptions = (customParameterConfig && customParameterConfig.autocomplete ? customParameterConfig.autocomplete : []).join(',');
-                        const snippet = `${this.settings.cucumberautocomplete.wrapSnippetsInCharacter}\${${num}|${autocompleteOptions}|}${this.settings.cucumberautocomplete.wrapSnippetsInCharacter}`;
+                        const snippet = `${this.settings.cucumberautocomplete.wrapSnippetsInCharacter}\${${num}${autocompleteOptions ? `|${autocompleteOptions}|` : ''}}${this.settings.cucumberautocomplete.wrapSnippetsInCharacter}`;
                         res = res.replace(match[i], () => snippet);
                     }
                     else {
@@ -668,7 +668,13 @@ export default class StepsHandler {
                     kind: CompletionItemKind.Snippet,
                     data: step.id,
                     documentation: step.documentation,
+                    // Need to force steps to appear first in autocopmletion list
                     sortText: 'AAA' + '_' + step.text,
+                    // We want to use the original text for autocompletion
+                    // because this is the easiest way
+                    // to replace custom params
+                    // TODO: Change this - maybe we should just pass the step
+                    // with custom params and do the replace
                     insertText: this.getCompletionInsertText(this.settings.cucumberautocomplete.customParametersAutocomplete ? step.originalText : step.text, stepPart),
                     insertTextFormat: InsertTextFormat.Snippet
                 };
