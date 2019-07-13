@@ -5,7 +5,8 @@ import {
     getMD5Id,
     escapeRegExp,
     getTextRange,
-    getSortPrefix
+    getSortPrefix,
+    uniq,
 } from './util';
 
 import {
@@ -123,6 +124,10 @@ export default class StepsHandler {
 
     getElementCount(id: string): number {
         return this.elemenstCountHash[id] || 0;
+    }
+
+    getCustomParametersInStep(step:string):string[] {
+        return (step.match(customParamRegExp) || []).map(str => str.trim());
     }
 
     getStepRegExp(): RegExp {
@@ -364,7 +369,7 @@ export default class StepsHandler {
 
             const match = res.match(/((?:\()?(?:\\.|\.|\[[^\]]+\])(?:\*|\+|\{[^\}]+\})(?:\)?))/g);
             if (match) {
-                const orderedCustomParamsInStep = (step.match(customParamRegExp) || []).map(str => str.trim());
+                const orderedCustomParamsInStep = this.getCustomParametersInStep(step);
                 for (let i = 0; i < match.length; i++) {
                     const num = i + 1;
                     if (this.settings.cucumberautocomplete.customParametersAutocomplete) {
@@ -398,36 +403,24 @@ export default class StepsHandler {
         stepRawComment;
     }
 
-    getUniqueCustomParametersFromStep(step: string) : string[] {
-        const customParametersHash = (step.match(customParamRegExp)||[]).reduce(
-            (agg, param) => {
-                agg[param.trim()] = true;
-                return agg;
-            },
-            {}
-        )
-        return Object.keys(customParametersHash).sort();
-    }
-
     // Consider doing markdown here
     getStepDocumentation(comments: JSDocComments, def: Location, originalStepPart:string):string {
         const comment = comments[def.range.start.line];
         const documentation = comment ? this.getDocumentation(comment) : originalStepPart;
-                const customParameterDocumentation = this.getUniqueCustomParametersFromStep(originalStepPart).map(
-                    parameter => {
-                        const customParameter = this.customParameterMap[parameter];
-                        if (customParameter && customParameter.documentation) {
-                            return {
-                                parameter: customParameter.parameter,
-                                documentation: customParameter.documentation
-                            }
-                        }
-                        else {
-                            return null;
-                        }
+        const customParameterDocumentation = this.getCustomParametersInStep(originalStepPart).map(
+            parameter => {
+                const customParameter = this.customParameterMap[parameter];
+                if (customParameter && customParameter.documentation) {
+                    return {
+                        parameter: customParameter.parameter,
+                        documentation: customParameter.documentation
                     }
-                ).filter(str => str);
-
+                }
+                else {
+                    return null;
+                }
+            }
+        ).filter(str => str);
 
         return  [
             'Step Definition\n',
