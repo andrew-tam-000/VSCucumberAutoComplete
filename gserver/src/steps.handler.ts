@@ -342,8 +342,9 @@ export default class StepsHandler {
         for (let i = 0; i < length; i++) {
             currArray.push(strArray.shift());
             try {
+                // Need to handle edge case of leading ^.*
                 const r = new RegExp('^' + escapeRegExp(currArray.join(' ')));
-                if (!r.test(stepPart)) {
+                if (!r.test(stepPart) || i === 0 && currArray[i] === '.*') {
                     res = [].concat(currArray.slice(-1), strArray).join(' ');
                     break;
                 }
@@ -373,7 +374,7 @@ export default class StepsHandler {
                         // For the simplest case, each custom param will match up exactly with an index
                         const customParameterConfig = this.customParameterMap[orderedCustomParamsInStep[i]];
                         const autocompleteOptions = (customParameterConfig && customParameterConfig.autocomplete ? customParameterConfig.autocomplete : []).join(',');
-                        const snippet = `\${${num}|${autocompleteOptions}|}`;
+                        const snippet = `${this.settings.cucumberautocomplete.wrapSnippetsInCharacter}\${${num}|${autocompleteOptions}|}${this.settings.cucumberautocomplete.wrapSnippetsInCharacter}`;
                         res = res.replace(match[i], () => snippet);
                     }
                     else {
@@ -398,8 +399,15 @@ export default class StepsHandler {
         stepRawComment;
     }
 
-    getCustomParametersFromStep(step: string) : string[] {
-        return (step.match(customParamRegExp) || []).map(str => str.trim());
+    getUniqueCustomParametersFromStep(step: string) : string[] {
+        const customParametersHash = (step.match(customParamRegExp)||[]).reduce(
+            (agg, param) => {
+                agg[param.trim()] = true;
+                return agg;
+            },
+            {}
+        )
+        return Object.keys(customParametersHash).sort();
     }
 
     getSteps(fullStepLine: string, stepPart: string, def: Location, gherkin: GherkinType, comments: JSDocComments, originalStepPart: string): Step[] {
@@ -409,7 +417,7 @@ export default class StepsHandler {
             this.getStepTextInvariants(stepPart) : [stepPart];
         const desc = this.getDescForStep(fullStepLine);
         const comment = comments[def.range.start.line];
-        const documentation = comment ? this.getDocumentation(comment) : fullStepLine;
+        const documentation = comment ? this.getDocumentation(comment) : originalStepPart;
         return stepsVariants
             .filter((step) => {
                 //Filter invalid long regular expressions
@@ -436,7 +444,7 @@ export default class StepsHandler {
                 const originalText = this.getTextForStep(originalStepPart);
                 const id = 'step' + getMD5Id(text);
                 const count = this.getElementCount(id);
-                const customParameterDocumentation = this.getCustomParametersFromStep(originalText).map(
+                const customParameterDocumentation = this.getUniqueCustomParametersFromStep(originalText).map(
                     parameter => {
                         const customParameter = this.customParameterMap[parameter];
                         if (customParameter && customParameter.documentation) {
@@ -454,16 +462,17 @@ export default class StepsHandler {
                 return { id, reg, partialReg, text, desc, def, count, gherkin, documentation: {
                     kind: 'plaintext',
                     value: [
+                        'Step Definition\n',
+                        documentation,
+                        '\n\n',
                         ...(customParameterDocumentation.length ? [
-                            'Custom Parameters',
-                            '\n',
+                            'Custom Parameters\n',
                             ...customParameterDocumentation.map(
-                                ({parameter, documentation}) => `${parameter}: ${documentation}`
+                                ({parameter, documentation}) => `${parameter}: ${documentation}\n`
                             ),
                             '\n'
                         ] : []
                         ),
-                        documentation
                     ].join('\n')
                 }, originalText};
             });
@@ -676,7 +685,7 @@ export default class StepsHandler {
         // Check if we are inside a stepdefition and on top of a custom parameter
         const highlightedCustomParameter = this.isCustomParameterHighlighted(line, character, text);
         const highlightedCustomParameterConfig = this.customParameterMap[highlightedCustomParameter]
-        const customParameterAutocomplete = highlightedCustomParameterConfig && highlightedCustomParameterConfig .autocomplete;
+        const customParameterAutocomplete = highlightedCustomParameterConfig && highlightedCustomParameterConfig.autocomplete;
 
         const res = this.elements
             //Filter via gherkin words comparing if strictGherkinCompletion option provided
@@ -693,11 +702,11 @@ export default class StepsHandler {
             //We got all the steps we need so we could make completions from them
             .map(step => {
                 return {
-                    label: this.settings.cucumberautocomplete.customParametersAutocomplete ? step.originalText : step.text,
+                    label: step.text,
                     kind: CompletionItemKind.Snippet,
                     data: step.id,
                     documentation: step.documentation,
-                    sortText: getSortPrefix(step.count, 5) + '_' + step.text,
+                    sortText: 'AAA' + '_' + step.text,
                     insertText: this.getCompletionInsertText(this.settings.cucumberautocomplete.customParametersAutocomplete ? step.originalText : step.text, stepPart),
                     insertTextFormat: InsertTextFormat.Snippet
                 };

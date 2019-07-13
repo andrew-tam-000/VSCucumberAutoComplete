@@ -134,6 +134,18 @@
                     "required": false,
                     "default": false
                 },
+                "cucumberautocomplete.wrapSnippetsInCharacter": {
+                    "description": "When autocompleting custom parameters, we can wrap them in a quotation",
+                    "type": "string",
+                    "required": false,
+                    "default": ""
+                },
+                "cucumberautocomplete.disableGherkinValidation": {
+                    "description": "Disable diagnostics for gherkin validation",
+                    "type": "boolean",
+                    "required": false,
+                    "default": false
+                },
                 "cucumberautocomplete.skipDocStringsFormat": {
                     "description": "Skip format of strings, that placed between ''' or \"\"\" strings",
                     "type": "boolean",

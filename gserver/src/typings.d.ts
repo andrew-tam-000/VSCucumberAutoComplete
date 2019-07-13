@@ -31,6 +31,8 @@ interface Settings {
         stepsInvariants?: boolean,
         customParameters?: CustomParameter[],
         customParametersAutocomplete?: boolean,
+        wrapSnippetsInCharacter: string,
+        disableGherkinValidation: boolean,
         skipDocStringsFormat?: boolean,
         formatConfOverride?: FormatConf[],
         onTypeFormat?: boolean,
