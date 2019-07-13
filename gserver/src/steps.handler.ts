@@ -24,7 +24,7 @@ import {
     Location,
     Range,
     CompletionItemKind,
-    InsertTextFormat,
+    InsertTextFormat
 } from 'vscode-languageserver';
 
 import * as glob from 'glob';
@@ -39,6 +39,7 @@ export type Step = {
     def: Definition,
     count: number,
     gherkin: GherkinType,
+    // TODO: Fix the typing here
     documentation: any,
 };
 
@@ -65,8 +66,6 @@ export default class StepsHandler {
     settings: Settings;
 
     customParameterMap: { [customParam: string]: CustomParameter }
-
-    stepWithoutCustomParameterMap: {[key:string]:string}
 
     constructor(root: string, settings: Settings) {
         const { steps, syncfeatures } = settings.cucumberautocomplete;
@@ -558,8 +557,6 @@ export default class StepsHandler {
         }, []);
     }
 
-    // We need to store the original step defintiion into elements as well
-
     populate(root: string, stepsPathes: StepSettings): void {
         this.elementsHash = {};
         this.elements = stepsPathes
@@ -641,23 +638,6 @@ export default class StepsHandler {
         }
     }
 
-    isCustomParameterHighlighted(line: string, character: number, text: string): string|null {
-        // If the current string matches anything in array, we are highlighhting a custom parameter
-        //
-        const nearestPreviousOpeningBracket = line.lastIndexOf('{', character);
-        const nearestNextClosingBracket = line.indexOf('}', character);
-
-        // If we are inbetween some brackets, let's check the text
-        if (nearestPreviousOpeningBracket > -1 && nearestNextClosingBracket  > -1 && nearestNextClosingBracket  > nearestPreviousOpeningBracket) {
-            const phraseInBrackets = line.slice(nearestPreviousOpeningBracket, nearestNextClosingBracket + 1);
-            // Now, only if the phrase in brackets matches a customParameter, are we good to go
-            if (this.customParameterMap[phraseInBrackets]) {
-                return phraseInBrackets;
-            }
-        }
-        return;
-    }
-
     getCompletion(line: string, position: Position, text: string): CompletionItem[] | null {
         const { line: lineNumber, character}  = position;
         //Get line part without gherkin part
@@ -665,27 +645,9 @@ export default class StepsHandler {
         if (!match) {
             return null;
         }
-        let [, , gherkinPart, , originalStepPart] = match;
+        let [, , gherkinPart, , stepPart] = match;
         //We don't need last word in our step part due to it could be incompleted
-        const stepPart = originalStepPart.replace(/[^\s]+$/, '');
-
-        /*
-        return [
-            {
-                label: this.elements
-            },
-            {
-                label: originalStepPart
-            }
-        ]
-        */
-
-        // Find the step definition that it matches exactly
-
-        // Check if we are inside a stepdefition and on top of a custom parameter
-        const highlightedCustomParameter = this.isCustomParameterHighlighted(line, character, text);
-        const highlightedCustomParameterConfig = this.customParameterMap[highlightedCustomParameter]
-        const customParameterAutocomplete = highlightedCustomParameterConfig && highlightedCustomParameterConfig.autocomplete;
+        stepPart = stepPart.replace(/[^\s]+$/, '');
 
         const res = this.elements
             //Filter via gherkin words comparing if strictGherkinCompletion option provided
@@ -712,20 +674,6 @@ export default class StepsHandler {
                 };
             });
 
-        // If we have one, we need to return our completion list
-        if (!!highlightedCustomParameter && customParameterAutocomplete && !!customParameterAutocomplete.length) {
-            const documentation = this.customParameterMap[highlightedCustomParameter].documentation;
-            return customParameterAutocomplete.map(
-                    (autocomplete:string) => ({
-                        label: autocomplete,
-                        kind: CompletionItemKind.Text,
-                        documentation,
-                        //sortText: getSortPrefix(step.count, 5) + '_' + step.text,
-                        insertText: autocomplete,
-                        insertTextFormat: InsertTextFormat.PlainText
-                    })
-                );
-        }
         return res.length ? res : null;
     }
 

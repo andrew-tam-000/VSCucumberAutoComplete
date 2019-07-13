@@ -168,7 +168,6 @@ documents.onDidChangeContent((change): void => {
     const changeText = change.document.getText();
     //Validate document
     const diagnostics = validate(clearGherkinComments(changeText));
-    console.log("WOWOWOWOW");
     connection.sendDiagnostics({ uri: change.document.uri, diagnostics });
 });
 
