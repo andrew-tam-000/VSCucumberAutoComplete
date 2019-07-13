@@ -409,14 +409,47 @@ export default class StepsHandler {
         return Object.keys(customParametersHash).sort();
     }
 
+    // Consider doing markdown here
+    getStepDocumentation(comments: JSDocComments, def: Location, originalStepPart:string):string {
+        const comment = comments[def.range.start.line];
+        const documentation = comment ? this.getDocumentation(comment) : originalStepPart;
+                const customParameterDocumentation = this.getUniqueCustomParametersFromStep(originalStepPart).map(
+                    parameter => {
+                        const customParameter = this.customParameterMap[parameter];
+                        if (customParameter && customParameter.documentation) {
+                            return {
+                                parameter: customParameter.parameter,
+                                documentation: customParameter.documentation
+                            }
+                        }
+                        else {
+                            return null;
+                        }
+                    }
+                ).filter(str => str);
+
+
+        return  [
+            'Step Definition\n',
+            documentation,
+            '\n\n',
+            ...(customParameterDocumentation.length ? [
+                'Custom Parameters\n',
+                ...customParameterDocumentation.map(
+                    ({parameter, documentation}) => `${parameter}: ${documentation}\n`
+                ),
+                '\n'
+            ] : []
+            ),
+        ].join('\n');
+    }
+
     getSteps(fullStepLine: string, stepPart: string, def: Location, gherkin: GherkinType, comments: JSDocComments, originalStepPart: string): Step[] {
         const stepsVariants = this.settings.cucumberautocomplete.stepsInvariants ?
             this.getStepTextInvariants(stepPart) : [stepPart];
         const stepsVariantsForOriginalStep = this.settings.cucumberautocomplete.stepsInvariants ?
             this.getStepTextInvariants(stepPart) : [stepPart];
         const desc = this.getDescForStep(fullStepLine);
-        const comment = comments[def.range.start.line];
-        const documentation = comment ? this.getDocumentation(comment) : originalStepPart;
         return stepsVariants
             .filter((step) => {
                 //Filter invalid long regular expressions
@@ -443,36 +476,10 @@ export default class StepsHandler {
                 const originalText = this.getTextForStep(originalStepPart);
                 const id = 'step' + getMD5Id(text);
                 const count = this.getElementCount(id);
-                const customParameterDocumentation = this.getUniqueCustomParametersFromStep(originalText).map(
-                    parameter => {
-                        const customParameter = this.customParameterMap[parameter];
-                        if (customParameter && customParameter.documentation) {
-                            return {
-                                parameter: customParameter.parameter,
-                                documentation: customParameter.documentation
-                            }
-                        }
-                        else {
-                            return null;
-                        }
-                    }
-                ).filter(str => str);
 
                 return { id, reg, partialReg, text, desc, def, count, gherkin, documentation: {
                     kind: 'plaintext',
-                    value: [
-                        'Step Definition\n',
-                        documentation,
-                        '\n\n',
-                        ...(customParameterDocumentation.length ? [
-                            'Custom Parameters\n',
-                            ...customParameterDocumentation.map(
-                                ({parameter, documentation}) => `${parameter}: ${documentation}\n`
-                            ),
-                            '\n'
-                        ] : []
-                        ),
-                    ].join('\n')
+                    value: this.getStepDocumentation(comments,  def, originalStepPart),
                 }, originalText};
             });
     }
