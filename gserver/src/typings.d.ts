@@ -8,7 +8,8 @@ type CustomParameter = {
     parameter: string | RegExp,
     value: string,
     autocomplete: (string|number)[] | null
-    documentation: string
+    documentation: string,
+    isString: boolean
 };
 
 type FormatConf = {

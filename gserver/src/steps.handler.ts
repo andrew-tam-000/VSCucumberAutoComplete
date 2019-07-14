@@ -378,7 +378,7 @@ export default class StepsHandler {
                         // For the simplest case, each custom param will match up exactly with an index
                         const customParameterConfig = this.customParameterMap[orderedCustomParamsInStep[i]];
                         const autocompleteOptions = (customParameterConfig && customParameterConfig.autocomplete ? customParameterConfig.autocomplete : []).join(',');
-                        const snippet = `${this.settings.cucumberautocomplete.wrapSnippetsInCharacter}\${${num}${autocompleteOptions ? `|${autocompleteOptions}|` : ''}}${this.settings.cucumberautocomplete.wrapSnippetsInCharacter}`;
+                        const snippet = `${customParameterConfig.isString ? "'" : ''}\${${num}${autocompleteOptions ? `|${autocompleteOptions}|` : ''}}${customParameterConfig.isString ? "'" : ''}`;
                         res = res.replace(match[i], () => snippet);
                     }
                     else {
