@@ -6,7 +6,10 @@ type PagesSettings = {
 
 type CustomParameter = {
     parameter: string | RegExp,
-    value: string
+    value: string,
+    autocomplete: (string|number)[] | null
+    documentation: string,
+    isString: boolean
 };
 
 type FormatConf = {
@@ -23,6 +26,9 @@ interface Settings {
         smartSnippets?: boolean,
         stepsInvariants?: boolean,
         customParameters?: CustomParameter[],
+        customParametersAutocomplete?: boolean,
+        wrapSnippetsInCharacter: string,
+        disableGherkinValidation: boolean,
         skipDocStringsFormat?: boolean,
         formatConfOverride?: FormatConf[],
         onTypeFormat?: boolean,

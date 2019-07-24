@@ -11,6 +11,18 @@
 			"sourceMaps": true,
 			"outFiles": [ "${workspaceRoot}/out/src/**/*.js" ],
 			"preLaunchTask": "npm"
+		},
+		{
+			"name": "Attach",
+			"type": "node",
+			"request": "attach",
+			"address": "localhost",
+			"port": 9229,
+			"sourceMaps": true,
+			"remoteRoot": "${workspaceRoot}/server/",
+			"localRoot": "${workspaceRoot}/server/",
+			"outFiles": ["${workspaceRoot}/server/**/*.js"],
+			"protocol": "inspector"
 		}
 	]
 }

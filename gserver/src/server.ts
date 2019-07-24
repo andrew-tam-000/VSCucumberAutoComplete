@@ -59,6 +59,11 @@ connection.onInitialize((params): InitializeResult => {
     };
 });
 
+function disableGherkinValidation(): boolean {
+    const v = settings.cucumberautocomplete.disableGherkinValidation;
+    return !!v;
+}
+
 function handleSteps(): boolean {
     const s = settings.cucumberautocomplete.steps;
     return s && s.length ? true : false;
@@ -129,7 +134,7 @@ connection.onCompletion((position: TextDocumentPositionParams): CompletionItem[]
         return pagesHandler.getCompletion(line, position.position);
     }
     if (handleSteps() && stepsHandler) {
-        return stepsHandler.getCompletion(line, position.position.line, text);
+        return stepsHandler.getCompletion(line, position.position, text);
     }
 });
 
@@ -144,6 +149,9 @@ connection.onCompletionResolve((item: CompletionItem): CompletionItem => {
 });
 
 function validate(text: string): Diagnostic[] {
+    if (disableGherkinValidation()) {
+        return [];
+    }
     return text.split(/\r?\n/g).reduce((res, line, i) => {
         let diagnostic;
         if (handleSteps() && stepsHandler && (diagnostic = stepsHandler.validate(line, i, text))) {

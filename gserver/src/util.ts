@@ -79,3 +79,12 @@ export function getSortPrefix(num: number, count: number): string {
     }
     return res;
 }
+
+export function uniq(arr:any[]): any[] {
+    return Object.keys(arr.reduce(
+        (agg, param) => {
+            agg[param] = true;
+            return agg;
+        }
+    )).sort();
+}

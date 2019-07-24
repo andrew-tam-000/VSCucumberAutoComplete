@@ -1,6 +1,16 @@
 # Cucumber Full Language Support
 VSCode Cucumber (Gherkin) Language Support + Format + Steps/PageObjects Autocomplete
 
+## Local Development
+- `npm install --prefix=gserver`
+- `npm install --prefix=gclient`
+- `npm run watch --prefix=gserver`
+- `npm run compile --prefix=gclient`
+- `code gclient`
+- Add workspace folder `gserver`
+- Run Debug > Launch Extension (gclient)
+- Run Debug > Attach (gclient)
+
 ## This extension adds rich language support for the Cucumber (Gherkin) language to VS Code, including:
 * Syntax highlight
 * Basic Snippets support
